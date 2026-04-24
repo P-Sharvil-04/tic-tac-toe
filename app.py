@@ -1,12 +1,16 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, join_room, emit
-import random, string, os
+import random, string
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret"
 
-# IMPORTANT: threading mode (no eventlet/gevent)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+# Threading mode (Render compatible)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading"
+)
 
 rooms = {}
 
@@ -32,9 +36,18 @@ def is_draw(board):
 def home():
     return render_template("index.html")
 
+@socketio.on("connect")
+def connect():
+    print("Client connected:", request.sid)
+
+@socketio.on("disconnect")
+def disconnect():
+    print("Client disconnected:", request.sid)
+
 @socketio.on("create_room")
 def create_room_event():
     room = generate_room()
+
     rooms[room] = {
         "board": [" "] * 9,
         "players": {},
@@ -46,11 +59,15 @@ def create_room_event():
     join_room(room)
     rooms[room]["players"][request.sid] = "X"
 
-    emit("room_created", {"room": room, "symbol": "X", "game": rooms[room]})
+    emit("room_created", {
+        "room": room,
+        "symbol": "X",
+        "game": rooms[room]
+    })
 
 @socketio.on("join_room")
 def join_room_event(data):
-    room = data["room"].upper()
+    room = data.get("room", "").upper()
 
     if room not in rooms:
         emit("error", {"msg": "Room not found"})
@@ -114,6 +131,5 @@ def reset(data):
         game["winning_combo"] = []
         emit("update", game, to=room)
 
-# Run locally only
 if __name__ == "__main__":
     socketio.run(app, debug=True)

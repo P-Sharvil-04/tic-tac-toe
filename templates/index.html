@@ -48,80 +48,84 @@
     <br />
     <button onclick="resetGame()">Reset</button>
 
-    <script>
-      let socket = io();
-      let room = "";
-      let player = "";
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
-      function createRoom() {
-        socket.emit("create_room");
+<script>
+  const socket = io({
+    transports: ["polling"],   // IMPORTANT for Render
+  });
+
+  let room = "";
+  let player = "";
+
+  function createRoom() {
+    socket.emit("create_room");
+  }
+
+  function joinRoom() {
+    let code = document.getElementById("roomInput").value;
+    socket.emit("join_room", { room: code });
+  }
+
+  socket.on("connect", () => {
+    console.log("Connected:", socket.id);
+  });
+
+  socket.on("room_created", (data) => {
+    room = data.room;
+    player = data.symbol;
+
+    document.getElementById("roomCode").innerHTML =
+      "Room: " + room + "<br>Share: " + window.location.origin + "/?room=" + room;
+
+    renderBoard(data.game);
+  });
+
+  socket.on("joined", (data) => {
+    room = data.room;
+    player = data.symbol;
+
+    document.getElementById("roomCode").innerHTML = "Room: " + room;
+  });
+
+  socket.on("update", (game) => {
+    renderBoard(game);
+  });
+
+  socket.on("error", (err) => {
+    alert(err.msg);
+  });
+
+  function renderBoard(game) {
+    let boardDiv = document.getElementById("board");
+    boardDiv.innerHTML = "";
+
+    document.getElementById("status").innerText = game.status;
+
+    game.board.forEach((cell, i) => {
+      let div = document.createElement("div");
+      div.className = "cell";
+      div.innerText = cell;
+
+      if (game.winning_combo.includes(i)) {
+        div.classList.add("win");
       }
 
-      function joinRoom() {
-        let code = document.getElementById("roomInput").value;
-        socket.emit("join_room", { room: code });
-      }
-
-      socket.on("room_created", (data) => {
-        room = data.room;
-        player = data.symbol;
-
-        document.getElementById("roomCode").innerHTML =
-          "Room: " +
-          room +
-          "<br>Share Link: " +
-          window.location.origin +
-          "/?room=" +
-          room;
-
-        renderBoard(data.game);
-      });
-
-      socket.on("joined", (data) => {
-        room = data.room;
-        player = data.symbol;
-
-        document.getElementById("roomCode").innerHTML = "Room: " + room;
-      });
-
-      socket.on("update", (game) => {
-        renderBoard(game);
-      });
-
-      socket.on("error", (err) => {
-        alert(err.msg);
-      });
-
-      function renderBoard(game) {
-        let boardDiv = document.getElementById("board");
-        boardDiv.innerHTML = "";
-
-        document.getElementById("status").innerText = game.status;
-
-        game.board.forEach((cell, i) => {
-          let div = document.createElement("div");
-          div.className = "cell";
-          div.innerText = cell;
-
-          if (game.winning_combo.includes(i)) {
-            div.classList.add("win");
-          }
-
-          div.onclick = () => {
-            socket.emit("move", {
-              room: room,
-              index: i,
-              player: player,
-            });
-          };
-
-          boardDiv.appendChild(div);
+      div.onclick = () => {
+        socket.emit("move", {
+          room: room,
+          index: i,
+          player: player,
         });
-      }
+      };
 
-      function resetGame() {
-        socket.emit("reset", { room: room });
-      }
-    </script>
+      boardDiv.appendChild(div);
+    });
+  }
+
+  function resetGame() {
+    socket.emit("reset", { room: room });
+  }
+</script>
   </body>
 </html>
