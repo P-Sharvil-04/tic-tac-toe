@@ -5,8 +5,8 @@ import random, string, os
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret"
 
-# ✅ REMOVE threading (auto-selects best async mode like gevent)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# IMPORTANT: threading mode (no eventlet/gevent)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 rooms = {}
 
@@ -32,11 +32,9 @@ def is_draw(board):
 def home():
     return render_template("index.html")
 
-# ✅ CREATE ROOM
 @socketio.on("create_room")
 def create_room_event():
     room = generate_room()
-
     rooms[room] = {
         "board": [" "] * 9,
         "players": {},
@@ -48,16 +46,11 @@ def create_room_event():
     join_room(room)
     rooms[room]["players"][request.sid] = "X"
 
-    emit("room_created", {
-        "room": room,
-        "symbol": "X",
-        "game": rooms[room]
-    })
+    emit("room_created", {"room": room, "symbol": "X", "game": rooms[room]})
 
-# ✅ JOIN ROOM
 @socketio.on("join_room")
 def join_room_event(data):
-    room = data.get("room", "").upper()
+    room = data["room"].upper()
 
     if room not in rooms:
         emit("error", {"msg": "Room not found"})
@@ -78,12 +71,11 @@ def join_room_event(data):
     emit("joined", {"room": room, "symbol": symbol})
     emit("update", game, to=room)
 
-# ✅ HANDLE MOVE
 @socketio.on("move")
 def move(data):
-    room = data.get("room")
-    index = data.get("index")
-    player = data.get("player")
+    room = data["room"]
+    index = data["index"]
+    player = data["player"]
 
     game = rooms.get(room)
     if not game:
@@ -110,10 +102,9 @@ def move(data):
 
     emit("update", game, to=room)
 
-# ✅ RESET GAME
 @socketio.on("reset")
 def reset(data):
-    room = data.get("room")
+    room = data["room"]
     game = rooms.get(room)
 
     if game:
@@ -121,24 +112,8 @@ def reset(data):
         game["turn"] = "X"
         game["status"] = "Turn: X"
         game["winning_combo"] = []
-
         emit("update", game, to=room)
 
-# ✅ REMOVE PLAYER WHEN DISCONNECTED
-@socketio.on("disconnect")
-def handle_disconnect():
-    for room, game in list(rooms.items()):
-        if request.sid in game["players"]:
-            del game["players"][request.sid]
-
-            # Remove empty rooms
-            if len(game["players"]) == 0:
-                del rooms[room]
-            else:
-                game["status"] = "Player disconnected"
-
-            emit("update", game, to=room)
-
-# ✅ RUN (LOCAL ONLY)
+# Run locally only
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=5000)
+    socketio.run(app, debug=True)
