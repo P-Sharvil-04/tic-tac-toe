@@ -6,6 +6,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret"
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
 rooms = {}
 
 WIN_COMBOS = [
@@ -30,12 +31,9 @@ def is_draw(board):
 def home():
     return render_template("index.html")
 
-# ---------------- SOCKET EVENTS ---------------- #
-
 @socketio.on("create_room")
 def create_room_event():
     room = generate_room()
-
     rooms[room] = {
         "board": [" "] * 9,
         "players": {},
@@ -47,11 +45,7 @@ def create_room_event():
     join_room(room)
     rooms[room]["players"][request.sid] = "X"
 
-    emit("room_created", {
-        "room": room,
-        "symbol": "X",
-        "game": rooms[room]
-    })
+    emit("room_created", {"room": room, "symbol": "X", "game": rooms[room]})
 
 @socketio.on("join_room")
 def join_room_event(data):
@@ -69,15 +63,15 @@ def join_room_event(data):
 
     symbol = "O"
     game["players"][request.sid] = symbol
-
     join_room(room)
+
     game["status"] = "Turn: X"
 
     emit("joined", {"room": room, "symbol": symbol})
     emit("update", game, to=room)
 
 @socketio.on("move")
-def move_event(data):
+def move(data):
     room = data["room"]
     index = data["index"]
     player = data["player"]
@@ -108,7 +102,7 @@ def move_event(data):
     emit("update", game, to=room)
 
 @socketio.on("reset")
-def reset_event(data):
+def reset(data):
     room = data["room"]
     game = rooms.get(room)
 
@@ -117,11 +111,8 @@ def reset_event(data):
         game["turn"] = "X"
         game["status"] = "Turn: X"
         game["winning_combo"] = []
-
         emit("update", game, to=room)
 
-# ---------------- RUN ---------------- #
-
+# IMPORTANT for Render
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))  # change to 5001 to avoid error
-    socketio.run(app, host="0.0.0.0", port=port)
+    socketio.run(app, host="0.0.0.0", port=5000)
